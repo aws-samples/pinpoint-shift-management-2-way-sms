@@ -1,0 +1,469 @@
+# author: pavlosik@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: Shift Notification & Booking via SMS
+
+Parameters:
+  PinpointProjectId:
+    Type: String
+    Description: Amazon Pinpoint Project ID.
+  PinpointOriginationNumber:
+    Type: String
+    Description: Type the mobile number from which you will send & receive SMS in E.164 format.
+  PinpointSegmnetId:
+    Type: String
+    Description: The Amazon Pinpoint segment ID that will send the SMS campaign to.
+  ApprovedNumbers:
+    Type: String
+    Description: The mobile numbers that are allowed to engage with the service format E164 +<country-code><number>. Separate numbers by comma +44834723985,+44432543254.
+  ConnectEnable:
+    Type: String
+    Default: 'YES'
+    AllowedValues:
+      - 'YES'
+      - 'NO'
+    Description: Specify if the solution should use Amazon Connect for outbound calls. If you select NO ignore all fields below.
+  InstanceId:
+    Type: String
+    Default: 'NA'
+    Description: If you set ConnectEnable to 'YES' provide the Amazon Connect Instance ID otherwise leave the default value.
+  ContactFlowID:
+    Type: String
+    Default: 'NA'
+    Description: If you set ConnectEnable to 'YES' provide the Amazon Connect Contact Flow ID otherwise leave the default value.
+  QueueID:
+    Type: String
+    Default: 'NA'
+    Description: If you set ConnectEnable to 'YES' provide the Amazon Connect Contact Queue ID otherwise leave the default value.  
+  SourcePhoneNumber:
+    Type: String
+    Default: 'NA'
+    Description: If you set ConnectEnable to 'YES' provide the Amazon Connect source phone number to perform the outbound calls otherwise leave the default value.      
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "Amazon Pinpoint configuration"  
+        Parameters:
+          - PinpointProjectId
+          - PinpointOriginationNumber
+          - PinpointSegmnetId
+          - ApprovedNumbers
+      -
+        Label:
+          default: "Amazon Connect configuration"
+        Parameters:
+          - ConnectEnable
+          - InstanceId
+          - ContactFlowID
+          - QueueID
+          - SourcePhoneNumber    
+
+Resources:
+
+#### AWS LAMBDAS
+##################################
+
+  LambdaSMSCampaign:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaSMSCampaignRole.Arn
+      Runtime: python3.9
+      Timeout: 60
+      Environment:
+        Variables:
+          PINPOINT_APPID: !Ref PinpointProjectId
+          ORIGINATION_NUMBER: !Ref PinpointOriginationNumber
+          SEGMENT_ID: !Ref PinpointSegmnetId
+          CONNECT_ENABLE: !Ref ConnectEnable 
+      ReservedConcurrentExecutions: 3
+      Code:
+        ZipFile: |
+          import os
+          import json
+          import boto3
+          def lambda_handler(event, context):
+              client = boto3.client('pinpoint')
+              appid = os.environ['PINPOINT_APPID']
+              segment_id = os.environ['SEGMENT_ID']
+              origination_number = os.environ['ORIGINATION_NUMBER']
+              connect_enable = os.environ['CONNECT_ENABLE']
+              for record in event['Records']:
+                  if record['eventName'] == 'INSERT':
+                      campaign_name = record['dynamodb']['Keys']['campaign_id']['S']
+                      shifts = record['dynamodb']['NewImage']['shifts']['S']
+                      if connect_enable == 'YES':
+                          sms_body = 'Available shifts: ' + shifts + '. To book a shift reply by typing the codes separated by comma e.g. XYZ123, XYZ222. Text REQUEST to receive all available shifts or STOP to stop receiving such notifications. If you want to speak to an agent text AGENT and what you need help with.'
+                      else:
+                          sms_body = 'Available shifts: ' + shifts + '. To book a shift reply by typing the codes separated by comma e.g. XYZ123, XYZ222. Text REQUEST to receive all available shifts or STOP to stop receiving such notifications'
+                      
+                      response = client.create_campaign(
+                          ApplicationId = appid,
+                          WriteCampaignRequest={
+                              'MessageConfiguration': {
+                                  'SMSMessage': {
+                                      'Body': sms_body,
+                                      'MessageType': 'TRANSACTIONAL',
+                                      'OriginationNumber': origination_number,
+                                  }
+                              },
+                              'Name': campaign_name,
+                              'Schedule': {
+                                  'Frequency': 'ONCE',
+                                  'IsLocalTime': False,
+                                  'StartTime': 'IMMEDIATE',
+                                  'Timezone': 'UTC+01',
+                              },
+                              'SegmentId': segment_id
+                          },
+                      )
+                      print(response)
+
+  LambdaTwoWaySMS:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaTwoWaySMSRole.Arn
+      Runtime: python3.9
+      Timeout: 60
+      Environment:
+        Variables:
+          PINPOINT_APPID: !Ref PinpointProjectId
+          DYNAMODB_TABLENAME: !Select [1, !Split ['/', !GetAtt ShiftStatusDynamoDB.Arn]]
+          APPROVED_NUMBERS: !Ref ApprovedNumbers
+          CONNECT_ENABLE: !Ref ConnectEnable
+          CONTACT_FLOW_ID: !Ref ContactFlowID
+          INSTANCE_ID: !Ref InstanceId
+          QUEUE_ID: !Ref QueueID
+          SOURCE_PHONE_NUMBER: !Ref SourcePhoneNumber
+      ReservedConcurrentExecutions: 3
+      Code:
+        ZipFile: |
+          import os
+          import json
+          import boto3
+          from boto3.dynamodb.conditions import Key, Attr
+
+          dynamodb_tablename = os.environ['DYNAMODB_TABLENAME']
+          contact_flow_id = os.environ['CONTACT_FLOW_ID']
+          connect_enable = os.environ['CONNECT_ENABLE']
+          instance_id = os.environ['INSTANCE_ID']
+          queue_id = os.environ['QUEUE_ID']
+          source_phone_number = os.environ['SOURCE_PHONE_NUMBER']
+          appid = os.environ['PINPOINT_APPID']
+          dynamodb = boto3.resource('dynamodb')
+          table = dynamodb.Table(dynamodb_tablename)
+          pinpoint = boto3.client('pinpoint')
+          connect = boto3.client('connect')
+
+          def lambda_handler(event, context):
+              approved_numbers = os.environ['APPROVED_NUMBERS']
+              for record in event['Records']:
+                  message = (str(json.loads(record['Sns']['Message'])['messageBody'])).strip()
+                  origination_number = str(json.loads(record['Sns']['Message'])['originationNumber'])
+                  destination_number = str(json.loads(record['Sns']['Message'])['destinationNumber'])
+                  
+                  # The approved numbers should be stored in a Database from where this script will obtain them
+                  # This feature will block people who don't have access to interact with the service
+                  approved_numbers = (approved_numbers.replace(' ','')).split(',')
+                  
+                  if origination_number in approved_numbers:
+                      if message.lower() == "request":
+                          data_query = table.scan(FilterExpression=Attr('shift_status').eq('available'))
+                          if int(data_query['Count']) == 0:
+                              send_sms('There are no shifts at this time', origination_number, destination_number)
+                          else:
+                              list_of_shifts = []
+                              for i in data_query['Items']:
+                                  list_of_shifts.append(str(i['shift_info']) + " " + str(i['shift_id']))
+                                  
+                              message_send = str('These are the shifts available : ' + str(list_of_shifts).replace('[','').replace(']','').replace("'",''))
+                              send_sms(message_send, origination_number, destination_number)
+                      elif (connect_enable == 'YES') and (message[0:5].lower() == 'agent'):
+                          message_send = str('Thank you, an agent will call you soon.')
+                          send_sms(message_send, origination_number, destination_number)
+                          response = connect.start_outbound_voice_contact(
+                              DestinationPhoneNumber=origination_number,
+                              ContactFlowId=contact_flow_id,
+                              InstanceId=instance_id,
+                              QueueId=queue_id,
+                              SourcePhoneNumber = source_phone_number,
+                              Attributes={
+                                  'help-request': message[5:],
+                              }
+                          )
+                      else:
+                          shifts = ((message.upper()).replace(' ','')).split(',')
+                          confirmation_message_booked = []
+                          confirmation_message_taken = []
+                          confirmation_message_notexist = []
+                          number_of_shifts = 0
+                          for shift in shifts:
+                              shift_query = table.query(KeyConditionExpression=Key('shift_id').eq(str(shift)))
+                              if int(shift_query['Count']) > 0:
+                                  number_of_shifts = number_of_shifts + 1
+                                  if shift_query['Items'][0]['shift_status'] == 'available':
+                                      response = table.update_item(
+                                          Key={
+                                              'shift_id': str(shift)
+                                          },
+                                          UpdateExpression="set shift_status=:r, employee=:p",
+                                          ExpressionAttributeValues={
+                                              ':r': 'taken',
+                                              ':p': origination_number 
+                                          },
+                                          ReturnValues='UPDATED_NEW'
+                                      )
+                                      confirmation_message_booked.append(str(shift))
+                                  else:
+                                      confirmation_message_taken.append(str(shift))
+                              else:
+                                  confirmation_message_notexist.append(str(shift))
+                              
+                              if len(confirmation_message_booked) == 0:
+                                  shift_booked = '0'
+                              else:
+                                  shift_booked = str(confirmation_message_booked).replace('[','').replace(']','').replace("'",'')
+                              if len(confirmation_message_taken) == 0:
+                                  shift_taken = '0'
+                              else:
+                                  shift_taken = str(confirmation_message_taken).replace('[','').replace(']','').replace("'",'')
+                              if len(confirmation_message_notexist) == 0:
+                                  shift_notexist = '0'
+                              else:
+                                  shift_notexist = str(confirmation_message_notexist).replace('[','').replace(']','').replace("'",'')
+                              
+                              if ((len(confirmation_message_booked) == 0) and (len(confirmation_message_taken) == 0) and (len(confirmation_message_notexist) > 0)):
+                                  if connect_enable == 'YES':
+                                      confirmation_message = "This is not a valid shift code, text REQUEST to view the available shifts or text AGENT and what you need help with to call you back." 
+                                  else:
+                                      confirmation_message = "This is not a valid shift code, text REQUEST to view the available shifts."
+                              else:
+                                  confirmation_message = "Request summary - Shift booked: " +  shift_booked + " | " + "Shift not available: " + shift_taken + " | " + "Shift doesn't exist: " + shift_notexist     
+                              
+                          print(send_sms(confirmation_message, origination_number, destination_number))
+                  else:
+                      print("This number is not whitelisted")
+                      print(send_sms('NOT-AUTHORISED please contact the administrator', origination_number, destination_number))
+
+          # Function to send SMS via Amazon Pinpoint API
+          def send_sms(message_send, origination_number, destination_number):
+              response = pinpoint.send_messages(
+                  ApplicationId = appid,
+                  MessageRequest = {
+                      'Addresses': {
+                          origination_number: {
+                              'ChannelType': 'SMS'
+                          }
+                      },
+                      'MessageConfiguration': {
+                          'SMSMessage': {
+                              'Body': message_send,
+                              'MessageType': 'TRANSACTIONAL',
+                              'OriginationNumber': destination_number
+                          }
+                      }
+                  }
+              )
+
+#### IAM ROLES
+##################################
+
+  LambdaSMSCampaignRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        -
+          PolicyName: "root"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "mobiletargeting:CreateCampaign"
+                Resource:
+                  - !Sub "arn:aws:mobiletargeting:${AWS::Region}:${AWS::AccountId}:*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "dynamodb:GetRecords"
+                  - "dynamodb:GetShardIterator"
+                  - "dynamodb:DescribeStream"
+                  - "dynamodb:ListShards"
+                  - "dynamodb:ListStreams"
+                Resource:
+                  - !GetAtt ShiftsCampaignDynamoDB.StreamArn
+
+  LambdaTwoWaySMSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        -
+          PolicyName: "root"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "mobiletargeting:SendMessages"
+                Resource:
+                  - !Sub "arn:aws:mobiletargeting:${AWS::Region}:${AWS::AccountId}:*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "connect:StartOutboundVoiceContact"                
+                Resource:
+                  - !Sub arn:aws:connect:${AWS::Region}:${AWS::AccountId}:instance/*/contact/*
+              -
+                Effect: "Allow"
+                Action:
+                  - "dynamodb:UpdateItem"
+                  - "dynamodb:Scan"
+                  - "dynamodb:Query"                  
+                Resource:
+                  - !GetAtt ShiftStatusDynamoDB.Arn
+
+
+#### SNS TOPIC & ROLE
+##################################
+
+  TwoWaySMSSNSTopic:
+    Type: AWS::SNS::Topic
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W47
+            reason: Not required.
+    Properties:
+      DisplayName: "2waySMSPinpoint-shifts"
+      Subscription:
+        -
+          Endpoint: !GetAtt LambdaTwoWaySMS.Arn
+          Protocol: "lambda"
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: "lambda:InvokeFunction"
+      Principal: "sns.amazonaws.com"
+      SourceArn: !Ref TwoWaySMSSNSTopic
+      FunctionName: !GetAtt LambdaTwoWaySMS.Arn
+
+  SNSRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W76
+            reason: Complex Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        -
+          PolicyName: "root"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action: "lambda:InvokeFunction"
+                Resource:
+                  - !GetAtt LambdaTwoWaySMS.Arn
+
+
+#### DYNAMO DB TABLES
+##################################
+
+  ShiftStatusDynamoDB:
+    Type: AWS::DynamoDB::Table
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties: 
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: 
+      - AttributeName: shift_id
+        AttributeType: S
+      KeySchema: 
+      - AttributeName: shift_id
+        KeyType: HASH
+      PointInTimeRecoverySpecification:  
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  ShiftsCampaignDynamoDB:
+    Type: AWS::DynamoDB::Table
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties: 
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: 
+      - AttributeName: campaign_id
+        AttributeType: S
+      KeySchema: 
+      - AttributeName: campaign_id
+        KeyType: HASH
+      PointInTimeRecoverySpecification:  
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+
+  DynamoDBLambdaTrigger:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties: 
+      BatchSize: 1
+      Enabled: True
+      EventSourceArn: !GetAtt ShiftsCampaignDynamoDB.StreamArn
+      FunctionName: !GetAtt LambdaSMSCampaign.Arn
+      StartingPosition: TRIM_HORIZON
