@@ -27,19 +27,19 @@ The diagram below illustrates the four possible messages an employee can send to
 
 To deploy this solution, you must have the following:
 
-* An originating identity (https://docs.aws.amazon.com/pinpoint/latest/userguide/channels-sms-originating-identities.html) that supports 2 way SMS in the country you are planning to send SMS to - Supported countries and regions (SMS channel) (https://docs.aws.amazon.com/pinpoint/latest/userguide/channels-sms-countries.html).
+* An [originating identity](https://docs.aws.amazon.com/pinpoint/latest/userguide/channels-sms-originating-identities.html) that supports 2 way SMS in the country you are planning to send SMS to - [Supported countries and regions (SMS channel)](https://docs.aws.amazon.com/pinpoint/latest/userguide/channels-sms-countries.html).
 * A mobile phone to send and receive SMS.
-* An AWS account (https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/).
-* An Amazon Pinpoint project - How to create an Amazon Pinpoint project (https://catalog.workshops.aws/amazon-pinpoint-customer-experience/en-US/prerequisites/create-a-project) .
-* An SMS customer segment - Download the example CSV (https://github.com/aws-samples/pinpoint-shift-management-2-way-sms/blob/main/assets/Pinpoint_Imported_SMS_Segment.csv), that contains one SMS endpoint. Replace the phone number (column C) with yours and import it to Amazon Pinpoint - How to import an Amazon Pinpoint segment (https://docs.aws.amazon.com/pinpoint/latest/userguide/segments-importing.html).
-* Add your mobile number in the Amazon Pinpoint SMS sandbox - Amazon Pinpoint SMS sandbox (https://docs.aws.amazon.com/pinpoint/latest/userguide/channels-sms-sandbox.html).
-* An Amazon Connect instance, number & contact flow if you want your employees to be able to request an agent call back. Download the example Connect contact flow (https://github.com/aws-samples/pinpoint-shift-management-2-way-sms/blob/main/assets/Connect-ContactFlow-Example) that you can import to your Amazon Connect instance (https://docs.aws.amazon.com/connect/latest/adminguide/contact-flow-import-export.html).
+* An [AWS account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/).
+* An Amazon Pinpoint project - [How to create an Amazon Pinpoint project](https://catalog.workshops.aws/amazon-pinpoint-customer-experience/en-US/prerequisites/create-a-project) .
+* An SMS customer segment - Download the [example CSV](https://github.com/aws-samples/pinpoint-shift-management-2-way-sms/blob/main/assets/Pinpoint_Imported_SMS_Segment.csv), that contains one SMS endpoint. Replace the phone number (column C) with yours and import it to Amazon Pinpoint - [How to import an Amazon Pinpoint segment](https://docs.aws.amazon.com/pinpoint/latest/userguide/segments-importing.html).
+* Add your mobile number in the Amazon Pinpoint SMS sandbox - [Amazon Pinpoint SMS sandbox](https://docs.aws.amazon.com/pinpoint/latest/userguide/channels-sms-sandbox.html).
+* An Amazon Connect instance, number & contact flow if you want your employees to be able to request an agent call back. Download the [example Connect contact flow](https://github.com/aws-samples/pinpoint-shift-management-2-way-sms/blob/main/assets/Connect-ContactFlow-Example) that you can import to your [Amazon Connect instance](https://docs.aws.amazon.com/connect/latest/adminguide/contact-flow-import-export.html).
 
-*Note:* UK numbers with a 447 prefix are not allowed by default. Before you can dial these UK mobile numbers, you must submit a service quota increase request. For more information, see Amazon Connect Service Quotas (https://docs.aws.amazon.com/connect/latest/adminguide/amazon-connect-service-limits.html)  in the Amazon Connect Administrator Guide.
+*Note:* UK numbers with a 447 prefix are not allowed by default. Before you can dial these UK mobile numbers, you must submit a service quota increase request. For more information, see [Amazon Connect Service Quotas](https://docs.aws.amazon.com/connect/latest/adminguide/amazon-connect-service-limits.html)  in the Amazon Connect Administrator Guide.
 
 #### Deploy the solution
 
-1. Download the *CloudFormation template* (https://github.com/aws-samples/pinpoint-shift-management-2-way-sms) and navigate to the AWS CloudFormation console in the AWS region you want to deploy the solution.
+1. Download the [*CloudFormation template*](https://github.com/aws-samples/pinpoint-shift-management-2-way-sms) and navigate to the AWS CloudFormation console in the AWS region you want to deploy the solution.
 2. Select *Create stack* and *With new resources*. Choose *Template is ready* as *Prerequisite - Prepare template* and *Upload a template file* as *Specify template*. Upload the template downloaded in step 1.
 3. Fill the AWS CloudFormation parameters as shown below:
     1. *ApprovedNumbers:* The mobile numbers that are allowed to use this service. The format should be E164 and if there is more than one number separate them by comma e.g. +4457434243,+432434324.
@@ -47,8 +47,8 @@ To deploy this solution, you must have the following:
     3. *PinpointProjectId:* The existing Amazon Pinpoint project Id.
     4. *SegmentId:* The Amazon Pinpoint existing segment Id that you want to send the SMS notifications to.
     5. *ConnectEnable:* Select *YES* if you already have an Amazon Connect instance with a Contact Flow and Queue. If you select NO ignore all the fields below, the solution will still be deployed but employees won't be able to request a call back.
-    6. *InstanceId:* The Amazon Connect InstanceId. Follow this link (https://docs.aws.amazon.com/connect/latest/adminguide/find-instance-arn.html) to learn how to find your Amazon Connect InstanceId.
-    7. *ContactFlowID:* The Amazon Connect Contact Flow Id that you want this solution to use. Follow thislink (https://docs.aws.amazon.com/connect/latest/adminguide/find-contact-flow-id.html) to learn how to find your Amazon Connect ContactFlow id.
+    6. *InstanceId:* The Amazon Connect InstanceId. Follow this [link](https://docs.aws.amazon.com/connect/latest/adminguide/find-instance-arn.html) to learn how to find your Amazon Connect InstanceId.
+    7. *ContactFlowID:* The Amazon Connect Contact Flow Id that you want this solution to use. Follow this [link](https://docs.aws.amazon.com/connect/latest/adminguide/find-contact-flow-id.html) to learn how to find your Amazon Connect ContactFlow id.
     8. *QueueID:* The Amazon Connect Queue Id. To obtain the Amazon Connect Queue Id navigate to your *Amazon Connect instance > Routing > Queues* and it should appear on the browser URL, see example: https://your-instance.awsapps.com/connect/queues/edit?id=*0c7fed63-815b-4040-8dbc-255800fca6d7*.
     9. *SourcePhoneNumber:* The Amazon Connect number in E164 format that is connected to the Contact Flow provided in step 7.
 4. Once the solution has been successfully deployed, navigate to the Amazon DynamoDB console and access the *ShiftsStatusDynamoDB** *table. Each item created represents a shift and should have a unique *shift_id* that employees use to book the shifts, a column *shift_status* with value = *available* and a column *shift_info* where you can put additional information about the shift - see example below.
