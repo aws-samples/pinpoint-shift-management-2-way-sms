@@ -52,10 +52,39 @@ To deploy this solution, you must have the following:
     8. *QueueID:* The Amazon Connect Queue Id. To obtain the Amazon Connect Queue Id navigate to your *Amazon Connect instance > Routing > Queues* and it should appear on the browser URL, see example: https://your-instance.awsapps.com/connect/queues/edit?id=*0c7fed63-815b-4040-8dbc-255800fca6d7*.
     9. *SourcePhoneNumber:* The Amazon Connect number in E164 format that is connected to the Contact Flow provided in step 7.
 4. Once the solution has been successfully deployed, navigate to the Amazon DynamoDB console and access the *ShiftsStatusDynamoDB** *table. Each item created represents a shift and should have a unique *shift_id* that employees use to book the shifts, a column *shift_status* with value = *available* and a column *shift_info* where you can put additional information about the shift - see example below.
+
+**DynamoDB item JSON example:**
+```
+{
+  "shift_id": {
+    "S": "XYZ1234"
+  },
+  "shift_info": {
+    "S": "15/08 5h nightshift"
+  },
+  "shift_status": {
+    "S": "available"
+  }
+}
+```
 ![shift_status_dynamoDB](assets/shift_status_dynamoDB.png)
+
 7. Navigate to **Amazon Pinpoint console > SMS and voice > Phone numbers**, select the phone number that you used as **OriginationNumber** for this solution and enable **Two-way SMS**. Under the **Incoming messages destination** section, select **Choose an existing SNS topic** and select the one containing the name **TwoWaySMSSNSTopic**.
-8. Navigate to the Amazon DynamoDB console and access the **ShiftsCampaignDynamoDB** table. Each item you create represents an Amazon Pinpoint SMS campaign. Create an item and provide a unique **campaign_id**, which will be used as the Amazon Pinpoint Campaign name. Create a new attribute (string) with the name **shifts** and type all available shifts that you want to communicate via this campaign. It is important to contain the **shift id** for each of them so employees can request them - see example below. 
+8. Navigate to the Amazon DynamoDB console and access the **ShiftsCampaignDynamoDB** table. Each item you create represents an Amazon Pinpoint SMS campaign. Create an item and provide a unique **campaign_id**, which will be used as the Amazon Pinpoint Campaign name. Create a new attribute (string) with the name **campaign_message** and type all available shifts that you want to communicate via this campaign. It is important to contain the **shift id** for each of them so employees can request them - see example below. 
     1. **Note:** By completing this step, you will trigger an Amazon Pinpoint SMS Campaign. You access the campaign information and analytics from the Amazon Pinpoint console.
+
+**DynamoDB item JSON example:**
+```
+{
+  "campaign_id": {
+    "S": "campaign_id1"
+  },
+  "campaign_message": {
+    "S": "15/08 5h nightshift XYZ123, 18/08 3h dayshift XYZ124"
+  }
+}
+```
+
 ![shift_campaign_dynamoDB](assets/shift_campaign_dynamoDB.png)
 
 ### Testing the solution
