@@ -4,7 +4,7 @@ The solution presented in this repository is part of the blog [Shift management 
 
 Note that the solution can be used for shift management but with small changes it can also communicate available appointments to customers / patients.
 
-The solution uses Amazon Pinpoint two way SMS, Amazon DynamoDB, AWS Lambda, Amazon Simple Notification Service and Amazon Connect (optional). The next section dives deeper into the architecture diagram and logic flow.
+The solution uses Amazon Pinpoint two way SMS, Amazon DynamoDB, AWS Lambda, Amazon Simple Notification Service and Amazon Connect (optional). The following sections dive deeper into the architecture diagram and business logic flow.
 
  ![architecture-diagram](assets/architecture-diagram.PNG)
 
@@ -40,7 +40,7 @@ To deploy this solution, you must have the following:
 #### Deploy the solution
 
 1. Download the [**CloudFormation template**](https://github.com/aws-samples/pinpoint-shift-management-2-way-sms) and navigate to the AWS CloudFormation console in the AWS region you want to deploy the solution.
-2. Select **Create stack** and *With new resources*. Choose **Template is ready** as **Prerequisite - Prepare template** and **Upload a template file** as **Specify template**. Upload the template downloaded in **step 1**.
+2. Select **Create stack** and **With new resources**. Choose **Template is ready** as **Prerequisite - Prepare template** and **Upload a template file** as **Specify template**. Upload the template downloaded in **step 1**.
 3. Fill the AWS CloudFormation parameters as shown below:
     1. **ApprovedNumbers:** The mobile numbers that are allowed to use this service. The format should be E164 and if there is more than one number separate them by comma e.g. +4457434243,+432434324.
     2. **OriginationNumber:** The mobile number that you have in your Amazon Pinpoint account in E164 format e.g. +44384238975.
