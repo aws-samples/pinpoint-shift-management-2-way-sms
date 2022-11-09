@@ -19,7 +19,7 @@ The solution uses Amazon Pinpoint two way SMS, Amazon DynamoDB, AWS Lambda, Amaz
 
 The diagram below illustrates the four possible messages an employee can send to the application. To safeguard the application from outsiders and bad actors, the **2 way SMS** AWS Lambda function looks up if the senders mobile number is in an allow list. In this solution, the allow list is hardcoded as an AWS Lambda environment variable but it can be stored in a data base like Amazon DynamoDB.
 
- ![inbound-business-logic](assets/inbound-sms-business-logic.PNG)
+ ![inbound-business-logic](assets/inbound-sms-business-logic.png)
 
 ### Solution implementation
 
