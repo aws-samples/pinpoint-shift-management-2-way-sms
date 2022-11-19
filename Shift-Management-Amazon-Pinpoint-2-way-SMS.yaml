@@ -94,7 +94,7 @@ Resources:
               for record in event['Records']:
                   if record['eventName'] == 'INSERT':
                       campaign_name = record['dynamodb']['Keys']['campaign_id']['S']
-                      shifts = record['dynamodb']['NewImage']['shifts']['S']
+                      shifts = record['dynamodb']['NewImage']['campaign_message']['S']
                       if connect_enable == 'YES':
                           sms_body = 'Available shifts: ' + shifts + '. To book a shift reply by typing the codes separated by comma e.g. XYZ123, XYZ222. Text REQUEST to receive all available shifts or STOP to stop receiving such notifications. If you want to speak to an agent text AGENT and what you need help with.'
                       else:
