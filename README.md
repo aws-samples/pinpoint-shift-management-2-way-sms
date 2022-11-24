@@ -1,6 +1,6 @@
 ## Shift management using Amazon Pinpoint's 2-way-SMS
 
-The solution presented in this repository is part of the blog [Shift management using Amazon Pinpoint's 2-way-SMS](https://aws-blogs-prod.amazon.com/messaging-and-targeting/shift-management-using-amazon-pinpoints-2-way-sms).
+The solution presented in this repository is part of the blog [Shift management using Amazon Pinpoint's 2-way-SMS](https://aws.amazon.com/blogs/messaging-and-targeting/shift-management-using-amazon-pinpoints-2-way-sms/).
 
 Note that the solution can be used for shift management but with small changes it can also communicate available appointments to customers / patients.
 
