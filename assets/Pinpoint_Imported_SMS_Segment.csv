@@ -1,6 +1,2 @@
 Id,ChannelType,Address,User.UserId
 111,SMS,+44......9,user1
-222,SMS,+1214.......2,user1
-333,Email,abc@gmail.com,user1
-444,SMS,+1214......4,user2
-555,Email,xyz@gmail.com,user2
