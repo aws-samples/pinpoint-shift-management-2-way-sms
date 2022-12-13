@@ -375,6 +375,7 @@ Resources:
             reason: Not required.
     Properties:
       DisplayName: "2waySMSPinpoint-shifts"
+      KmsMasterKeyId: alias/aws/sns
       Subscription:
         -
           Endpoint: !GetAtt LambdaTwoWaySMS.Arn
